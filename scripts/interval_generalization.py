@@ -136,12 +136,30 @@ def main():
         std_peak_times.append(float(np.std(peak_times_this_interval)))
 
     # Plot results
+    expected_us_times = np.array(expected_us_times)
+    mean_peak_times = np.array(mean_peak_times)
+    std_peak_times = np.array(std_peak_times)
+
     plt.figure()
-    plt.bar(training_intervals, peak_time_errors)
-    plt.xlabel("Training interval (s)")
-    plt.ylabel("Peak time error (s)")
-    plt.title("Peak time error vs. training interval")
+    plt.errorbar(
+        expected_us_times, mean_peak_times,
+        yerr=std_peak_times,
+        fmt="o",
+        capsize=4,
+        label="EB peak time (mean ± sd across seeds)",
+    )
+
+    # Reference line: perfect timing
+    t_min = min(expected_us_times.min(), mean_peak_times.min())
+    t_max = max(expected_us_times.max(), mean_peak_times.max())
+    plt.plot([t_min, t_max], [t_min, t_max], linestyle="--", color="gray", label="y = x (perfect)")
+
+    plt.xlabel("Expected US time (cs_onset + trained interval) [s]")
+    plt.ylabel("Measured EB peak time in CS-only test [s]")
+    plt.title("Training-interval generalisation")
+    plt.legend()
     plt.show()
+
 
 if __name__ == "__main__":
     main()
