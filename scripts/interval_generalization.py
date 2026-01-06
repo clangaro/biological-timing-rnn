@@ -72,7 +72,7 @@ def main():
                 tau_e=0.020,
                 tau_i=0.010,
                 tau_s=0.200,
-                tau_elig=0.15,
+                tau_elig=0.25,
                 eta_ee=eta_ee,
                 w_ee_max=w_ee_max
             )
