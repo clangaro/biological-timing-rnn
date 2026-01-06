@@ -27,11 +27,11 @@ def main():
     training_intervals = [0.25, 0.30, 0.35]  # seconds
     random_seeds = [0, 1, 2, 3, 4, 5]
 
-    N_train = 20
+    N_train = 50
     epsilon_bias = 0.01
 
     # Learning strenght 
-    eta_ee = 1e-4
+    eta_ee = 2e-4
     w_ee_max = 1.0
 
     C = SimConfig(dt=0.001, max_time=0.6, record_every=1)
