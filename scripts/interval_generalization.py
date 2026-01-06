@@ -30,6 +30,20 @@ def main():
     N_train = 20
     epsilon_bias = 0.01
 
+    # Learning strenght 
+    eta_ee = 1e-4
+    w_ee_max = 1.0
+
+    C = SimConfig(dt=0.001, max_time=0.6, record_every=1)
+
+    # Bias terms and initial state
+    b_e = np.zeros(n_e)
+    b_i = np.zeros(n_i)
+    r_e0 = np.zeros(n_e)
+    r_i0 = np.zeros(n_i)
+    s_e0 = np.zeros(n_e)
+    e_e0 = np.zeros(n_e)
+
     peak_time_errors = []
 
     for interval in training_intervals:
