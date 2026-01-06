@@ -44,7 +44,12 @@ def main():
     s_e0 = np.zeros(n_e)
     e_e0 = np.zeros(n_e)
 
-    peak_time_errors = []
+    # Result bins 
+    mean_peak_times = []
+    std_peak_times = []
+    expected_us_times = []
+
+    
 
     for interval in training_intervals:
         for seed in random_seeds:
