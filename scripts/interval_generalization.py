@@ -49,22 +49,91 @@ def main():
     std_peak_times = []
     expected_us_times = []
 
-    
+    # Outer loop over training intervals
 
     for interval in training_intervals:
-        for seed in random_seeds:
-            np.random.seed(seed)
+        us_onset = cs_onset + interval 
+        expected_us_times.append(us_onset)
 
-            # Run simulation with current interval and seed
-            traj = simulate_trial(
-                r_e0, r_i0, s_e0, e_e0, inputs_cs_only, b_e, b_i, W, P_test, C
+        peak_times_this_interval = []
+
+        # Inner loop over random seeds
+        for seed in random_seeds:
+            rng = np.random.default_rng(seed)
+
+            #New network per each seed 
+            W = init_weights(rng, n_e=n_e, n_i=n_i, w_scale=0.05)
+
+            # Weak bias from E_A to E_B
+            W.w_ee[n_a:, :n_a] += epsilon_bias
+
+            # Training Parameters
+            P_train = Parameters(
+                tau_e=0.020,
+                tau_i=0.010,
+                tau_s=0.200,
+                tau_elig=0.2,
+                eta_ee=eta_ee,
+                w_ee_max=w_ee_max
             )
 
-            # Compute peak time error for this trial
-            peak_time_B = traj.t[np.argmax(traj.r_e[:, n_a:])]
-            expected_us_time = interval + 0.250  # CS-US interval
-            error_B = peak_time_B - expected_us_time
-            peak_time_errors.append(error_B)
+            # Training inputs
+            inputs_train = make_trial_inputs_minimal(
+                n_e=n_e,
+                n_i=n_i,
+                dt=C.dt,
+                max_time=C.max_time,
+                cs_onset=cs_onset,
+                cs_duration=cs_duration,
+                cs_amp=1.0,
+                us_onset=us_onset,
+                us_duration=us_duration,
+                us_amp_e=1.0,
+                us_amp_i=1.0,
+                fraction_a=fraction_a
+            )
+
+            #Train for N trials
+            for trial in range(N_train):
+                simulate_trial(
+                    r_e0, r_i0, s_e0, e_e0, inputs_train, b_e, b_i, W, P_train, C
+                )
+
+            # Testing Parameters (no learning)
+            P_test = Parameters(
+                tau_e=0.020,
+                tau_i=0.010,
+                tau_s=0.200,
+                tau_elig=0.2,
+                eta_ee=eta_ee,
+                w_ee_max=w_ee_max
+            )
+
+            # Testing inputs (CS only)
+            inputs_test = make_trial_inputs_minimal(
+                n_e=n_e,
+                n_i=n_i,
+                dt=C.dt,
+                max_time=C.max_time,
+                cs_onset=cs_onset,
+                cs_duration=cs_duration,
+                cs_amp=1.0,
+                us_amp_e=0.0,
+                us_amp_i=0.0,
+                fraction_a=fraction_a
+            )
+
+            # Simulate test trial
+            traj = simulate_trial(
+                r_e0, r_i0, s_e0, e_e0, inputs_test, b_e, b_i, W, P_test, C
+            )
+
+            mean_r_r_B = traj.r_e[:, n_a:].mean(axis=1)
+            peak_time_B = traj.t[np.argmax(mean_r_r_B)]
+            peak_times_this_interval.append(peak_time_B)
+
+        mean_peak_times.append(float(np.mean(peak_times_this_interval)))
+        std_peak_times.append(float(np.std(peak_times_this_interval)))
 
     # Plot results
     plt.figure()
