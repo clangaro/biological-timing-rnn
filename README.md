@@ -1,13 +1,13 @@
 # Project Goal
 
-The goal of this project is to construct a minimal, biologically motivated recurrent neural network in which:
+The goal of this project is to construct a minimal, biologically motivated **rate-based** recurrent network in which:
 
-- Timed predictions emerge intrinsically from network dynamics  
-- Timed prediction errors (including omission responses exceeding presence responses) arise without explicit clock variables or dedicated error units  
-- Learning depends on local, interpretable plasticity rules  
-- Network behaviour maps directly onto experimental findings reported by **Liu & Buonomano (2025)**  
+- Timed predictions emerge intrinsically from network dynamics, without explicit clock variables or delay lines
+- Timed prediction errors (including omission responses exceeding presence responses) arise from circuit interactions, without dedicated error units
+- Learning depends on a local, interpretable plasticity rule
+- Network behaviour maps onto the cortical timing phenomena reported by **Liu & Buonomano (2025)**
 
-The emphasis is on **dynamical systems and circuit mechanisms**, not performance-optimised machine learning.
+The emphasis is on **dynamical systems and circuit mechanisms**, not performance-optimised machine learning. This is a firing-rate model, not a spiking network.
 
 ---
 
@@ -15,156 +15,111 @@ The emphasis is on **dynamical systems and circuit mechanisms**, not performance
 
 ## Populations
 
-The network consists of:
+- Two excitatory populations, **EA** and **EB**, driven by temporally ordered inputs (CS-like and US-like)
+- A single inhibitory population, **I**, providing feedforward inhibition and stabilisation
 
-- Two excitatory populations, **EA** and **EB**, corresponding to ensembles preferentially driven by temporally ordered inputs (e.g. CS-like and US-like stimuli)  
-- A single inhibitory population, **I**, providing global stabilisation  
-
-This represents the minimal circuit motif capable of expressing learned sequential activation, asymmetric coupling, and inhibition-stabilised dynamics.
-
----
+This is the minimal circuit motif capable of expressing learned sequential activation, asymmetric coupling, and inhibition-stabilised dynamics.
 
 ## Rate Dynamics
 
-Population firing rates obey standard continuous-time rate equations:
+Population firing rates obey continuous-time rate equations, integrated by forward Euler:
 
 ```math
-\tau_E \, \dot{\mathbf{r}}_E
-= -\mathbf{r}_E
-+ \phi\!\left(
-W_{EE} \mathbf{x}_E
-- W_{EI} r_I
-+ \mathbf{u}(t)
-\right)
+\tau_E \, \dot{\mathbf{r}}_E = -\mathbf{r}_E + \phi\!\left( W_{EE}\,\mathbf{s}_E - W_{EI}\,\mathbf{r}_I + \mathbf{u}_E(t) + \mathbf{b}_E \right)
 ```
 
 ```math
-\tau_I \, \dot{r}_I
-= -r_I
-+ \phi_I\!\left(
-W_{IE} \mathbf{r}_E
-- W_{II} r_I
-\right)
+\tau_I \, \dot{r}_I = -r_I + \phi\!\left( W_{IE}\,\mathbf{r}_E - W_{II}\,r_I + u_I(t) + b_I \right)
 ```
 
-where:
-
-- **rE = [rA, rB]ᵀ**  
-- **φ(·)** is a saturating nonlinearity (e.g. softplus or threshold-linear)
-
----
+where **φ(·)** is a threshold-linear (ReLU) nonlinearity. Recurrent excitatory input is mediated by the slow trace **sE** (below), not by instantaneous rates.
 
 ## Stability Regime
 
-Initial synaptic weights are chosen such that:
-
-- Excitatory coupling is weak and approximately symmetric  
-- Inhibitory feedback is sufficiently strong to ensure stability  
-- The network operates in an **inhibition-stabilised or damped-transient regime**
+Initial weights are small and non-negative, with inhibition sufficient to keep the network in a stable, damped-transient regime.
 
 ---
 
 # Emergent Timing Mechanism
 
-Timing is not encoded explicitly. Instead, intrinsic timescales arise from synaptic dynamics.
-
-Two biologically motivated mechanisms are considered:
-
-- Short-term synaptic plasticity (facilitation or depression) on **E → E** synapses  
-- Slow synaptic currents (e.g. NMDA-like filtering):
+Timing is not encoded explicitly. The intrinsic timescale arises from a **slow synaptic current** (NMDA-like filtering of excitatory activity):
 
 ```math
-\tau_s \, \dot{\mathbf{s}}_E
-= -\mathbf{s}_E + \mathbf{r}_E
+\tau_s \, \dot{\mathbf{s}}_E = -\mathbf{s}_E + \mathbf{r}_E
 ```
 
-Recurrent input is mediated via **sE**.
-
-Both mechanisms generate internal temporal structure **without delay lines or clocks**.
+Recurrent excitatory input is mediated via **sE**, so the slow time constant `tau_s` sets the circuit's internal timescale — producing temporal structure without delay lines or clocks.
 
 ---
 
-# Learning Rules
+# Learning Rule
 
-## Asymmetric Excitatory Plasticity
-
-Excitatory synapses follow a temporally asymmetric Hebbian rule implemented via eligibility traces:
+Only excitatory-to-excitatory (**E → E**) synapses learn. They follow a local, temporally asymmetric Hebbian rule driven by an eligibility trace:
 
 ```math
-\tau_{\text{pre}} \, \dot{e}_j
-= -e_j + r_j(t)
+\tau_{\text{elig}} \, \dot{e}_j = -e_j + r_j(t)
 ```
 
 ```math
-\Delta w_{ij}
-\propto r_i(t)\, e_j(t)
-- \lambda\, r_j(t)\, e_i(t)
+\Delta w_{ij} \propto \eta_{EE}\, r_i(t)\, e_j(t)
 ```
 
-This rule strengthens synapses when presynaptic activity reliably precedes postsynaptic activity, promoting directional coupling from **EA → EB** during training.
+Because the eligibility trace keeps the presynaptic (CS-driven) population tagged when the postsynaptic (US-driven) population is active, this rule strengthens **EA → EB** coupling specifically — the directional asymmetry is emergent, not hard-coded. Weights obey Dale's law (clipped to be non-negative) and are bounded above by `w_ee_max`.
 
-Weights obey **Dale’s law** and are constrained within fixed bounds.
-
----
-
-## Inhibitory Homeostatic Plasticity
-
-Inhibitory synapses onto excitatory neurons adapt to stabilise firing rates:
-
-```math
-\Delta w^{EI}_{k i}
-\propto r_I^{(k)}(t)\,
-\bigl( r_E^{(i)}(t) - r^\ast \bigr)
-```
-
-where **r\*** is a target excitatory firing rate.
-
-This prevents runaway excitation during learning and maintains balanced dynamics.
+Inhibitory weights are fixed; they do not learn in the current implementation.
 
 ---
 
 # Training Paradigm
 
-Training consists of repeated trials in which:
+Each trial:
 
-- A brief input (**CS**) drives **EA**  
-- After a fixed interval **Δ**, a second input (**US**) drives **EB**
+- A brief input (**CS**) drives **EA**
+- After a fixed interval **Δ**, a second input (**US**) drives **EB**, and also drives **I** (feedforward inhibition)
 
-Through plasticity, asymmetric coupling from **EA → EB** emerges, allowing CS input alone to evoke a delayed response in **EB**.
+Through plasticity, asymmetric **EA → EB** coupling emerges, so that after training the CS alone evokes a delayed response in **EB**. Testing uses CS-only trials (learning off).
 
 ---
 
 # Emergent Timed Prediction Error
 
-Prediction errors arise from circuit interactions rather than explicit error computation.
+The prediction error arises from circuit interactions, not explicit computation:
 
-A key mechanism is feedforward inhibition recruited by the US:
+- When the **US** occurs, it drives both **EB** and **I**; the recruited inhibition suppresses the internally generated predicted response
+- When the **US** is omitted, this inhibition is absent, disinhibiting the predicted response
 
-- When the US occurs, it drives both **EB** and **I**, suppressing the internally generated predicted response  
-- When the US is omitted, this inhibitory suppression is absent, revealing a larger delayed response  
-
-Thus, **omission responses exceed presence responses** due to disinhibition of predicted activity, producing a timed prediction-error signal at both population and single-neuron levels.
+As a result, **omission responses exceed presence responses**, producing a timed prediction-error signal as an emergent circuit effect.
 
 ---
 
 # Expected Outcomes
 
-After learning:
+The included simulations test whether, after training:
 
-- CS alone evokes a delayed, temporally precise response in **EB** (timed prediction)  
-- CS+US trials show reduced late responses  
-- CS-only (omission) trials show enhanced late responses  
+- **CS alone** evokes a delayed response in **EB**, time-locked to the trained interval (`run_sim.py`)
+- The **EB peak time tracks the trained interval** across different Δ (`interval_generalization.py`)
+- **CS-only (omission)** trials show an enhanced late response relative to CS+US trials (omission > presence)
 
-These behaviours correspond directly to key experimental observations in **Liu & Buonomano (2025)**.
+These behaviours correspond to the cortical timing phenomena in **Liu & Buonomano (2025)**.
+
+---
+
+# Implemented vs. Planned
+
+**Implemented:**
+- Rate-based E/I dynamics with threshold-linear nonlinearity
+- Slow-current (`tau_s`) timing mechanism
+- Eligibility-trace Hebbian learning on E → E synapses, with Dale's law and weight bounds
+- Feedforward-inhibition prediction-error mechanism (US drives I)
+- Emergent EA → EB directional coupling
+
+**Planned / not yet implemented:**
+- Inhibitory homeostatic plasticity (inhibitory weights currently fixed)
+- Short-term synaptic plasticity (facilitation/depression) as an alternative timing source
+- An anti-Hebbian decay term in the E → E rule
 
 ---
 
 # Project Scope
 
-This model prioritises:
-
-- Interpretability over optimisation  
-- Minimal circuit complexity  
-- Direct correspondence between model components and biological mechanisms  
-
-Deliverables include a clean simulation, mechanistic analyses, and a concise explanation suitable for **PhD applications** or direct communication with the **Buonomano lab**.
+This model prioritises interpretability over optimisation, minimal circuit complexity, and a direct correspondence between model components and biological mechanisms. 
